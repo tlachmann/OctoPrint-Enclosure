@@ -1,6 +1,6 @@
 import sys
 import board
-from adafruit_emc2101.emc2101_lut import EMC2101_LUT as EMC2101
+from adafruit_emc2101.emc2101_ext import EMC2101_EXT as EMC2101
 
 i2c = board.I2C()  # uses board.SCL and board.SDA
 FAN_MAX_RPM = 1700
