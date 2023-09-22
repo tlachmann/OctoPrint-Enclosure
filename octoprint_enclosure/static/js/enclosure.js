@@ -18,7 +18,7 @@ $(function () {
         return (item.output_type() === "regular" && !item.toggle_timer());
       });
     });
-    
+
     self.settings_possible_outputs = ko.pureComputed(function () {
       return ko.utils.arrayFilter(self.settingsViewModel.settings.plugins.enclosure.rpi_outputs(), function (item) {
         return ((item.output_type() === "regular" && !item.toggle_timer()) || item.output_type() === "gcode_output" || item.output_type() === "shell_output");
@@ -72,7 +72,7 @@ $(function () {
           }
         });
       }
-      return return_value;     
+      return return_value;
     };
 
     self.linkedTemperatureControl = function(sensor_index){
@@ -99,7 +99,7 @@ $(function () {
           return_value = true;
           return false;
         }
-      });      
+      });
       return return_value;
     };
 
@@ -110,7 +110,7 @@ $(function () {
           return_value = true;
           return false;
         }
-      });      
+      });
       return return_value;
     };
 
@@ -121,7 +121,7 @@ $(function () {
           return_value = true;
           return false;
         }
-      });      
+      });
       return return_value;
     };
 
@@ -131,7 +131,7 @@ $(function () {
         if (output.output_type()=="temp_hum_control") {
           return_value = true
           return false;
-        } 
+        }
       });
       return return_value;
     };
@@ -273,7 +273,7 @@ $(function () {
       return temp;
     }
 
-    self.getDutyCycle = function (duty_cycle) {    
+    self.getDutyCycle = function (duty_cycle) {
       if (duty_cycle === undefined || isNaN(parseFloat(duty_cycle))) return "-";
       if (parseInt(duty_cycle) == 0) return String("off");
       return duty_cycle;
@@ -343,10 +343,10 @@ $(function () {
           type: "GET",
           dataType: "json",
           data: request,
-          success: function (data) {         
+          success: function (data) {
             item.temp_ctr_new_set_value("");
             item.temp_ctr_set_value(newSetTemperature);
-            self.getUpdateUI();  
+            self.getUpdateUI();
           },
           error: function (textStatus, errorThrown) {
             new PNotify({
@@ -362,7 +362,7 @@ $(function () {
           text: "Invalid set temperature",
           type: "error"
         });
-      } 
+      }
     };
 
     self.addRpiOutput = function () {
@@ -485,7 +485,7 @@ $(function () {
         dataType: "json",
         data: request,
         success: function (data) {
-          self.getUpdateUI();  
+          self.getUpdateUI();
         }
       });
     };
@@ -605,7 +605,7 @@ $(function () {
       });
     };
 
-    self.handlePWM = function (item) {
+    self.handlePWM_old = function (item) {
       var pwm_value = item.new_duty_cycle();
 
       pwm_value = parseInt(pwm_value);
@@ -624,6 +624,64 @@ $(function () {
           dataType: "json",
           data: request,
           url: self.buildPluginUrl("/setPWM"),
+          success: function (data) {
+            item.new_duty_cycle("");
+            item.duty_cycle(pwm_value);
+            self.getUpdateUI();
+          }
+        });
+      }
+    };
+
+    self.handlePWM = function (item) {
+      var pwm_value = item.new_duty_cycle();
+
+      pwm_value = parseInt(pwm_value);
+
+      if (pwm_value < 0 || pwm_value > 100 || isNaN(pwm_value)) {
+        item.new_duty_cycle("")
+        new PNotify({
+          title: "Enclosure",
+          text: "Duty Cycle value needs to be between 0 and 100!",
+          type: "error"
+        });
+      } else {
+        var request = JSON.stringify({ duty_cycle: pwm_value });
+        $.ajax({
+          type: "PATCH",
+          contentType: "application/json",
+          dataType: "json",
+          data: request,
+          url: self.buildPluginUrl("/pwm/" + item.index_id()),
+          success: function (data) {
+            item.new_duty_cycle("");
+            item.duty_cycle(pwm_value);
+            self.getUpdateUI();
+          }
+        });
+      }
+    };
+
+    self.handleEMC = function (item) {
+      var pwm_value = item.new_duty_cycle();
+
+      pwm_value = parseInt(pwm_value);
+
+      if (pwm_value < 0 || pwm_value > 100 || isNaN(pwm_value)) {
+        item.new_duty_cycle("")
+        new PNotify({
+          title: "Enclosure",
+          text: "Duty Cycle value needs to be between 0 and 100!",
+          type: "error"
+        });
+      } else {
+        var request = JSON.stringify({ duty_cycle: pwm_value });
+        $.ajax({
+          type: "PATCH",
+          contentType: "application/json",
+          dataType: "json",
+          data: request,
+          url: self.buildPluginUrl("/emc/" + item.index_id()),
           success: function (data) {
             item.new_duty_cycle("");
             item.duty_cycle(pwm_value);
