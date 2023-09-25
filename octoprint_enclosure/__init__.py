@@ -469,18 +469,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         if 'duty_cycle' not in data:
             return make_response("missing duty_cycle attribute", 406)
         set_value = self.to_int(data['duty_cycle'])
-        script = os.path.dirname(os.path.realpath(__file__)) + "/SETEMC2101.py"
-        cmd = [sys.executable, script, str(set_value)]
-        if self._settings.get(["use_sudo"]):
-             cmd.insert(0, "sudo")
-        stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
-        output, errors = stdout.communicate()
-        if self._settings.get(["debug_temperature_log"]) is True:
-            if len(errors) > 0:
-                self._logger.error("EMC2101 error: %s", errors)
-            else:
-                self._logger.debug("EMC2101 result: %s", output)
-        self._logger.debug(output + " " + errors)
+        self.write_emc_pwm(self.to_int(identifier), self.constrain(set_value, 0, 100))
         return make_response('', 204)
 
 
@@ -870,7 +859,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         except Exception as ex:
             self.log_error(ex)
 
-    def toggle_output(self, output_index, first_run=False):
+    def toggle_output(self, output_index, first_run=False): # TODO: Add emc support
         for output in [item for item in self.rpi_outputs if item['index_id'] == output_index]:
             gpio_pin = self.to_int(output['gpio_pin'])
             index_id = self.to_int(output['index_id'])
@@ -1002,6 +991,14 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                                 val = 0
                             pwm_status.append(
                                 dict(index_id=index, pwm_value=val, auto_startup=startup, auto_shutdown=shutdown))
+                if output['output_type'] == 'emc':
+                    if 'duty_cycle' in output:
+                        pwm_val = output['duty_cycle']
+                        val = self.to_int(pwm_val)
+                    else:
+                        val = 0
+                    pwm_status.append(
+                        dict(index_id=index, pwm_value=val, auto_startup=startup, auto_shutdown=shutdown))
             self._plugin_manager.send_plugin_message(self._identifier,
                                                      dict(rpi_output_regular=regular_status, rpi_output_pwm=pwm_status,
                                                           rpi_output_neopixel=neopixel_status,
@@ -1431,7 +1428,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
     def handle_emc_linked_temperature(self):
         try:
-            for pwm_output in list(filter(lambda item: item['output_type'] == 'emc',
+            for pwm_output in list(filter(lambda item: item['output_type'] == 'emc' and item['pwm_temperature_linked'],
                                           self.rpi_outputs)):
                 if self._printer.is_printing():
                     index_id = self.to_int(pwm_output['index_id'])
@@ -1454,23 +1451,11 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
                     self._logger.debug("Calculated duty for EMC %s is %s", index_id, calculated_duty)
                 elif self.print_complete:
-                    calculated_duty = self.to_int(pwm_output['default_duty_cycle'])
+                    calculated_duty = self.to_int(pwm_output['duty_cycle'])
                 else:
-                    calculated_duty = self.to_int(pwm_output['default_duty_cycle'])
-            script = os.path.dirname(os.path.realpath(__file__)) + "/SETEMC2101.py"
-            cmd = [sys.executable, script, str(int(calculated_duty))]
-            if self._settings.get(["use_sudo"]):
-                cmd.insert(0, "sudo")
-            self._logger.info("Calculated fan speed is ", calculated_duty)
-            stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
-            output, errors = stdout.communicate()
-            if self._settings.get(["debug_temperature_log"]) is True:
-                if len(errors) > 0:
-                    self._logger.error("EMC2101 error: %s", errors)
-                else:
-                    self._logger.debug("EMC2101 result: %s", output)
-            self._logger.debug(output + " " + errors)
-        
+                    calculated_duty = 0
+
+                self.write_emc_pwm(self.to_int(pwm_output['index_id']) ,self.constrain(calculated_duty, 0, 100))
 
         except Exception as ex:
             self.log_error(ex)
@@ -1956,6 +1941,29 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             self.log_error(ex)
             pass
 
+    def write_emc_pwm(self, output_index, pwm_value, queue_id=None):
+        try:
+            if queue_id is not None:
+                self._logger.debug("running scheduled queue id %s", queue_id)
+            for output in [item for item in self.rpi_outputs if item['index_id'] == output_index]:
+                if output['output_type'] == 'emc':
+                    old_pwm_value = output['duty_cycle'] if 'duty_cycle' in output else -1
+                    if not self.to_int(old_pwm_value) == self.to_int(pwm_value):
+                        output['duty_cycle'] = pwm_value
+                        script = os.path.dirname(os.path.realpath(__file__)) + "/SETEMC2101.py"
+                        cmd = [sys.executable, script, str(int(pwm_value))]
+                        if self._settings.get(["use_sudo"]):
+                            cmd.insert(0, "sudo")
+                        stdout = Popen(cmd, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+                        st_output, errors = stdout.communicate()
+                        self._logger.debug("Writing PWM with command: %s value %s", cmd, pwm_value)
+                        if len(errors) > 0:
+                            self._logger.error("EMC2101 error: %s", errors)
+                            self._logger.debug("EMC2101 result: %s", st_output)
+        except Exception as ex:
+            self.log_error(ex)
+            pass
+
     def get_output_list(self):
         result = []
         for rpi_output in self.rpi_outputs:
@@ -2020,7 +2028,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                     delay_seconds = self.get_startup_delay_from_output(rpi_output)
                     self.schedule_auto_startup_outputs(rpi_output, delay_seconds)
                 if rpi_output['toggle_timer']:
-                    if rpi_output['output_type'] == 'regular' or rpi_output['output_type'] == 'pwm':
+                    if rpi_output['output_type'] == 'regular' or rpi_output['output_type'] in ['pwm', 'emc']:
                         self.toggle_output(rpi_output['index_id'], True)
                 if self.is_hour(rpi_output['shutdown_time']):
                     shutdown_delay_seconds = self.get_shutdown_delay_from_output(rpi_output)
@@ -2033,7 +2041,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             self.print_complete = True
             for rpi_output in self.rpi_outputs:
                 shutdown_time = rpi_output['shutdown_time']
-                if rpi_output['output_type'] == 'pwm' and rpi_output['pwm_temperature_linked']:
+                if rpi_output['output_type'] in ['pwm', 'emc'] and rpi_output['pwm_temperature_linked']:
                     rpi_output['duty_cycle'] = rpi_output['default_duty_cycle']
                 if rpi_output['auto_shutdown'] and not self.is_hour(shutdown_time):
                     delay_seconds = self.to_float(shutdown_time)
@@ -2048,7 +2056,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             for rpi_output in self.rpi_outputs:
                 if rpi_output['shutdown_on_failed']:
                     shutdown_time = rpi_output['shutdown_time']
-                    if rpi_output['output_type'] == 'pwm' and rpi_output['pwm_temperature_linked']:
+                    if rpi_output['output_type'] in ['pwm', 'emc'] and rpi_output['pwm_temperature_linked']:
                         rpi_output['duty_cycle'] = rpi_output['default_duty_cycle']
                     if rpi_output['auto_shutdown'] and not self.is_hour(shutdown_time):
                         delay_seconds = self.to_float(shutdown_time)
@@ -2095,11 +2103,12 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             self.add_regular_output_to_queue(shutdown_delay_seconds, rpi_output, value, sufix)
         if rpi_output['output_type'] == 'ledstrip':
             self.ledstrip_set_rgb(rpi_output)
-        if rpi_output['output_type'] == 'pwm' and not rpi_output['pwm_temperature_linked']:
+        if rpi_output['output_type'] in ['pwm', 'emc'] and not rpi_output['pwm_temperature_linked']:
             value = 0
             self.add_pwm_output_to_queue(shutdown_delay_seconds, rpi_output, value, sufix)
-        if rpi_output['output_type'] == 'pwm' and rpi_output['pwm_temperature_linked']:
-            self.schedule_pwm_duty_on_queue(shutdown_delay_seconds, rpi_output, 0, sufix)
+        if rpi_output['output_type'] in ['pwm', 'emc'] and rpi_output['pwm_temperature_linked']:
+            value = 0
+            self.schedule_pwm_duty_on_queue(shutdown_delay_seconds, rpi_output, value, sufix)
         if (rpi_output['output_type'] == 'neopixel_indirect' or rpi_output['output_type'] == 'neopixel_direct'):
             self.add_neopixel_output_to_queue(rpi_output, shutdown_delay_seconds, 0, 0, 0, sufix)
         if rpi_output['output_type'] == 'temp_hum_control':
@@ -2120,7 +2129,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             self._logger.info("LEDSTRIP set rgb color: %s, %s, %s", red, green, blue)
             ledstrip.setcolourrgb(self.to_int(red), self.to_int(green), self.to_int(blue))
 
-    def start_outpus_with_server(self):
+    def start_outpus_with_server(self): # TODO: Fix typo in function name
         for rpi_output in self.rpi_outputs:
             if rpi_output['startup_with_server']:
                 gpio = self.to_int(rpi_output['gpio_pin'])
@@ -2135,6 +2144,9 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 if rpi_output['output_type'] == 'pwm' and not rpi_output['pwm_temperature_linked']:
                     value = self.to_int(rpi_output['default_duty_cycle'])
                     self.write_pwm(gpio, value)
+                if rpi_output['output_type'] == 'emc' and not rpi_output['pwm_temperature_linked']:
+                    value = self.to_int(rpi_output['default_duty_cycle'])
+                    self.write_emc_pwm(self.to_int(rpi_output['index_id']), value)
                 if (rpi_output['output_type'] == 'neopixel_indirect' or rpi_output['output_type'] == 'neopixel_direct'):
                     red, green, blue = self.get_color_from_rgb(rpi_output['default_neopixel_color'])
                     led_count = rpi_output['neopixel_count']
@@ -2154,7 +2166,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             self.add_regular_output_to_queue(delay_seconds, rpi_output, value, sufix)
         if rpi_output['output_type'] == 'ledstrip':
             self.ledstrip_set_rgb(rpi_output)
-        if rpi_output['output_type'] == 'pwm' and not rpi_output['pwm_temperature_linked']:
+        if rpi_output['output_type'] in ['pwm', 'emc'] and not rpi_output['pwm_temperature_linked']:
             value = self.to_int(rpi_output['default_duty_cycle'])
             self.add_pwm_output_to_queue(delay_seconds, rpi_output, value, sufix)
         if (rpi_output['output_type'] == 'neopixel_indirect' or rpi_output['output_type'] == 'neopixel_direct'):
@@ -2206,13 +2218,20 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
     def add_pwm_output_to_queue(self, delay_seconds, rpi_output, value, sufix):
         queue_id = '{0!s}_{1!s}'.format(rpi_output['index_id'], sufix)
+        thread = None
 
         self._logger.debug("Scheduling pwm output id %s for on %s delay_seconds", queue_id, delay_seconds)
 
-        thread = threading.Timer(delay_seconds, self.write_pwm,
-                                 args=[self.to_int(rpi_output['gpio_pin']), value, queue_id])
-
-        self.event_queue.append(dict(queue_id=queue_id, thread=thread))
+        if rpi_output['output_type'] == 'pwm':
+            thread = threading.Timer(delay_seconds, self.write_pwm,
+                                    args=[self.to_int(rpi_output['gpio_pin']), value, queue_id])
+        elif rpi_output['output_type'] == 'emc':
+            thread = threading.Timer(delay_seconds, self.write_emc_pwm,
+                                    args=[self.to_int(rpi_output['index_id']), value, queue_id])
+        if thread != None:
+            self.event_queue.append(dict(queue_id=queue_id, thread=thread))
+        else:
+            self._logger.error("Output_type %s not supported", rpi_output['output_type'])
 
     def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, value, sufix):
         queue_id = '{0!s}_{1!s}_{2!s}'.format(rpi_output['index_id'], "pwm_linked_temp", sufix)
@@ -2358,11 +2377,14 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                         self.write_gpio(self.to_int(output['gpio_pin']), value)
                     comm_instance._log("Setting REGULAR output %s to value %s" % (index_id, value))
                     return
-                if output['output_type'] == 'pwm':
+                if output['output_type'] in ['pwm', 'emc']:
                     set_value = self.to_int(self.get_gcode_value(cmd, 'S'))
                     set_value = self.constrain(set_value, 0, 100)
                     output['duty_cycle'] = set_value
-                    self.write_pwm(self.to_int(output['gpio_pin']), set_value)
+                    if output['output_type'] == 'pwm':
+                        self.write_pwm(self.to_int(output['gpio_pin']), set_value)
+                    elif output['output_type'] == 'emc':
+                        self.write_emc_pwm(self.to_int(output['index_id']), set_value)
                     comm_instance._log("Setting PWM output %s to value %s" % (index_id, set_value))
                     return
                 if output['output_type'] == 'neopixel_indirect' or output['output_type'] == 'neopixel_direct':

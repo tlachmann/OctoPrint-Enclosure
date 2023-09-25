@@ -255,7 +255,8 @@
 </h4>
 <!-- /ko -->
 
-<!-- ko ifnot: (($data.output_type() == "pwm" || $data.output_type() == "emc") && $data.pwm_temperature_linked()) -->
+<!-- ko ifnot: ($data.output_type() == "pwm" && $data.pwm_temperature_linked()) -->
+<!-- ko ifnot: ($data.output_type() == "emc") -->
 <!-- ko ifnot: (($data.output_type() == "regular" || $data.output_type() == "pwm") &&  $data.toggle_timer()) -->
 <!-- ko ifnot: ($data.output_type() == "gcode_output" || $data.output_type() == "temperature_alarm" || $data.output_type() == "shell_output") -->
 <div>
@@ -290,6 +291,7 @@
     </span>
     <!-- /ko -->
 </div>
+<!-- /ko -->
 <!-- /ko -->
 <!-- /ko -->
 <!-- /ko -->
