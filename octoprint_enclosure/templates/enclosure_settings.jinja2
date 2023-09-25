@@ -156,14 +156,14 @@
     </div>
     <!-- /ko -->
 
-    <!-- ko if: ($data.output_type() == "regular" || ($data.output_type() == "pwm" && !$data.pwm_temperature_linked()) ) -->
+    <!-- ko if: ($data.output_type() == "regular" || (($data.output_type() == "pwm" || $data.output_type() == "emc") && !$data.pwm_temperature_linked()) ) -->
     <div class="control-group">
       <div class="controls">
         <label class="checkbox">
           <input type="checkbox" data-bind="checked: toggle_timer"> {{ _('Timer Toggle') }}
         </label>
         <span class="help-inline">Toggle output every amount of seconds. It will start when the print starts and stop when print is complete. For
-          PWM pins it will use the default PWM value when ON.
+          PWM output it will use the default PWM duty cycle when ON.
         </span>
       </div>
     </div>
@@ -186,10 +186,10 @@
     <!-- /ko -->
 
 
-    <!-- ko ifnot: (($data.output_type() == "regular" || $data.output_type() == "pwm") &&  $data.toggle_timer()) -->
+    <!-- ko ifnot: (($data.output_type() == "regular" || $data.output_type() == "pwm" || $data.output_type() == "emc") && $data.toggle_timer()) -->
     <!-- ko ifnot: ($data.output_type() == "gcode_output" || $data.output_type() == "temperature_alarm" || $data.output_type() == "shell_output") -->
     <!-- ko ifnot: ($data.output_type() == "pwm" && $data.pwm_temperature_linked()) -->
-    <!-- ko ifnot: ($data.output_type() == "emc") -->
+    <!-- ko ifnot: ($data.output_type() == "emc" && $data.pwm_temperature_linked()) -->
     <div class="control-group">
       <div class="controls">
         <label class="checkbox">

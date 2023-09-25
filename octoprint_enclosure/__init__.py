@@ -859,7 +859,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         except Exception as ex:
             self.log_error(ex)
 
-    def toggle_output(self, output_index, first_run=False): # TODO: Add emc support
+    def toggle_output(self, output_index, first_run=False):
         for output in [item for item in self.rpi_outputs if item['index_id'] == output_index]:
             gpio_pin = self.to_int(output['gpio_pin'])
             index_id = self.to_int(output['index_id'])
@@ -921,6 +921,27 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                             self.write_pwm(self.to_int(output['gpio_pin']), 0)
                         self.update_ui_outputs()
                         return
+
+            if output['output_type'] == 'emc':
+                if first_run or 'duty_cycle' not in output:
+                    current_pwm_value = 0
+                else:
+                    current_pwm_value = self.to_int(pwm['duty_cycle'])
+
+                if current_pwm_value == 0:
+                    time_delay = self.to_int(output['toggle_timer_on'])
+                    write_value = self.to_int(output['default_duty_cycle'])
+                else:
+                    time_delay = self.to_int(output['toggle_timer_off'])
+                    write_value = 0
+
+                if self.print_complete:
+                    self.write_emc_pwm(index_id, 0)
+                else:
+                    self.write_emc_pwm(index_id, write_value)
+                    thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
+                    thread.start()
+                return
 
     def update_ui(self):
         self.update_ui_outputs()
