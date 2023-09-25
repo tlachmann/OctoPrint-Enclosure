@@ -2042,7 +2042,10 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             for rpi_output in self.rpi_outputs:
                 shutdown_time = rpi_output['shutdown_time']
                 if rpi_output['output_type'] in ['pwm', 'emc'] and rpi_output['pwm_temperature_linked']:
-                    rpi_output['duty_cycle'] = rpi_output['default_duty_cycle']
+                    if rpi_output['output_type'] == 'pwm':
+                        self.write_pwm(self.to_int(rpi_output['gpio_pin']), rpi_output['default_duty_cycle'])
+                    elif rpi_output['output_type'] == 'emc':
+                        self.write_emc_pwm(self.to_int(rpi_output['index_id']), rpi_output['default_duty_cycle'])
                 if rpi_output['auto_shutdown'] and not self.is_hour(shutdown_time):
                     delay_seconds = self.to_float(shutdown_time)
                     self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
@@ -2057,7 +2060,10 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 if rpi_output['shutdown_on_failed']:
                     shutdown_time = rpi_output['shutdown_time']
                     if rpi_output['output_type'] in ['pwm', 'emc'] and rpi_output['pwm_temperature_linked']:
-                        rpi_output['duty_cycle'] = rpi_output['default_duty_cycle']
+                        if rpi_output['output_type'] == 'pwm':
+                            self.write_pwm(self.to_int(rpi_output['gpio_pin']), rpi_output['default_duty_cycle'])
+                        elif rpi_output['output_type'] == 'emc':
+                            self.write_emc_pwm(self.to_int(rpi_output['index_id']), rpi_output['default_duty_cycle'])
                     if rpi_output['auto_shutdown'] and not self.is_hour(shutdown_time):
                         delay_seconds = self.to_float(shutdown_time)
                         self.schedule_auto_shutdown_outputs(rpi_output, delay_seconds)
@@ -2242,7 +2248,10 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         self.event_queue.append(dict(queue_id=queue_id, thread=thread))
 
     def set_pwm_duty_cycle(self, rpi_output, value, queue_id):
-        rpi_output['duty_cycle'] = value
+        if rpi_output['output_type'] == 'pwm':
+            self.write_pwm(self.to_int(rpi_output['gpio_pin']), value)
+        elif rpi_output['output_type'] == 'emc':
+            self.write_emc_pwm(self.to_int(rpi_output['index_id']), value)
         if queue_id is not None:
             self.stop_queue_item(queue_id)
 
@@ -2380,7 +2389,6 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 if output['output_type'] in ['pwm', 'emc']:
                     set_value = self.to_int(self.get_gcode_value(cmd, 'S'))
                     set_value = self.constrain(set_value, 0, 100)
-                    output['duty_cycle'] = set_value
                     if output['output_type'] == 'pwm':
                         self.write_pwm(self.to_int(output['gpio_pin']), set_value)
                     elif output['output_type'] == 'emc':
