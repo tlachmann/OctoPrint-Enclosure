@@ -1,7 +1,7 @@
 import sys
 import time
 import adafruit_dht
-
+from microcontroller import Pin
 
 # Parse command line parameters.
 sensor_args =   {
@@ -16,7 +16,7 @@ if len(sys.argv) == 3 and sys.argv[1] in sensor_args:
 else:
     sys.exit(1)
 
-dht_dev = sensor(pin)
+dht_dev = sensor(Pin(pin))
 
 # DHT sensor read fails quite often, causing enclosure plugin to report value of 0.
 # If this happens, retry as suggested in the adafruit_dht docs.
