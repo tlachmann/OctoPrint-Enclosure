@@ -1572,6 +1572,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 pin = self.to_int(gpio_out_pwm['gpio_pin'])
                 self._logger.info("Setting GPIO pin %s as PWM", pin)
                 for pwm in (pwm_dict for pwm_dict in self.pwm_instances if pin in pwm_dict):
+                    pwm_dict[pin].stop()
                     self.pwm_instances.remove(pwm)
                 self.clear_channel(pin)
                 GPIO.setup(pin, GPIO.OUT)
