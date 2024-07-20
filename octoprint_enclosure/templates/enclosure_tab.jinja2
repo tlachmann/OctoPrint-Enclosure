@@ -193,7 +193,7 @@
 </div>
 <!-- /ko -->
 
-<!-- ko if: ($data.output_type() == "pwm")  -->
+<!-- ko if: ($data.output_type() == "pwm"|| $data.output_type() == "emc")  -->
 <h4>
     <span data-bind="html: label"> </span>
     <span class="badge">pwm</span>
@@ -201,13 +201,20 @@
 <div class="input-append">
     <input type="text" class="input-mini" data-bind="value: new_duty_cycle, valueUpdate: 'input', attr: {placeholder:$root.getDutyCycle(duty_cycle())}">
     <!-- ko ifnot: ($data.pwm_temperature_linked())  -->
+    <!-- ko if: ($data.output_type() == "pwm")  -->
     <button class="btn btn-input-inc" title="Set PWM" data-bind="enable: $root.isUser(), click: $root.handlePWM">
         <i class="fa fa-check"></i>
     </button>
     <!-- /ko -->
+    <!-- ko if: ($data.output_type() == "emc")  -->
+    <button class="btn btn-input-inc" title="Set PWM" data-bind="enable: $root.isUser(), click: $root.handleEMC">
+        <i class="fa fa-check"></i>
+    </button>
+    <!-- /ko -->
+    <!-- /ko -->
     <!-- ko if: ($data.pwm_temperature_linked())  -->
     <button class="btn btn-input-inc" title="Temperature controlled PWM" disabled>
-        <i class="fa fa-check"></i>
+        <i class="fa fa-lock"></i>
     </button>
     <!-- /ko -->
 </div>
@@ -249,7 +256,8 @@
 <!-- /ko -->
 
 <!-- ko ifnot: ($data.output_type() == "pwm" && $data.pwm_temperature_linked()) -->
-<!-- ko ifnot: (($data.output_type() == "regular" || $data.output_type() == "pwm") &&  $data.toggle_timer()) -->
+<!-- ko ifnot: ($data.output_type() == "emc" && $data.pwm_temperature_linked()) -->
+<!-- ko ifnot: (($data.output_type() == "regular" || $data.output_type() == "pwm" || $data.output_type() == "emc") && $data.toggle_timer()) -->
 <!-- ko ifnot: ($data.output_type() == "gcode_output" || $data.output_type() == "temperature_alarm" || $data.output_type() == "shell_output") -->
 <div>
     <h5>
@@ -286,8 +294,9 @@
 <!-- /ko -->
 <!-- /ko -->
 <!-- /ko -->
+<!-- /ko -->
 
-<!-- ko if: (($data.output_type() == "regular" || $data.output_type() == "pwm") &&  $data.toggle_timer()) -->
+<!-- ko if: (($data.output_type() == "regular" || $data.output_type() == "pwm" || $data.output_type() == "emc") && $data.toggle_timer()) -->
 <h5>
     <span>Time Toggle</span>
     <span class="badge"> active</span>

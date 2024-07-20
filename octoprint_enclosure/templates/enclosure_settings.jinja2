@@ -23,6 +23,11 @@
           <input type="radio" value="pwm" data-bind="checked: output_type, attr: {name: 'output_type_' + $index() }"> {{ _('PWM') }}
         </label>
       </div>
+       <div class="controls">
+        <label class="radio">
+          <input type="radio" value="emc" data-bind="checked: output_type, attr: {name: 'output_type_' + $index() }"> {{ _('EMC 2101 PWM controler') }}
+        </label>
+      </div>
       <div class="controls">
         <label class="radio">
           <input type="radio" value="neopixel_indirect" data-bind="checked: output_type, attr: {name: 'output_type_' + $index() }"> {{ _('NeoPixel Indirect') }}
@@ -91,7 +96,7 @@
       </div>
     </div>
     <!-- /ko -->
-    <!-- ko ifnot: ($data.output_type() == "gcode_output" || $data.output_type() == "temperature_alarm" || $data.output_type() == "shell_output" || $data.output_type() == "ledstrip" || ($data.output_type() == "regular" && $data.gpio_i2c_enabled())) -->
+    <!-- ko ifnot: ($data.output_type() == "gcode_output" || $data.output_type() == "temperature_alarm" || $data.output_type() == "emc" || $data.output_type() == "shell_output" || $data.output_type() == "ledstrip" || ($data.output_type() == "regular" && $data.gpio_i2c_enabled())) -->
     <div class="control-group">
       <label class="control-label">{{ _('IO Number') }}</label>
       <div class="controls">
@@ -101,7 +106,7 @@
         <!-- /ko -->
         <!-- ko if: ($data.output_type() == "neopixel_indirect")  -->
         <span class="help-inline">
-          <span class="label label-danger">Attention</span> Neopixel requires a microcontroller (ex: arduino) 
+          <span class="label label-danger">Attention</span> Neopixel requires a microcontroller (ex: arduino)
             connected to I2C bus. This is the pin on the
           microcontroller that is connected to the Neopixel.
         </span>
@@ -110,7 +115,7 @@
     </div>
     <!-- /ko -->
 
-    <!-- ko if: ($data.output_type() == "pwm" ) -->
+    <!-- ko if: (($data.output_type() == "pwm" ) || ($data.output_type() == "emc" )) -->
     <div class="control-group">
       <div class="controls">
         <label class="checkbox">
@@ -139,7 +144,7 @@
     </div>
     <!-- /ko -->
 
-    <!-- ko if: ($data.output_type() == "pwm" && $data.pwm_temperature_linked()) -->
+    <!-- ko if: (($data.output_type() == "pwm" || $data.output_type() == "emc") && $data.pwm_temperature_linked()) -->
     <div class="control-group">
       <label class="control-label">{{ _('Duty A') }}</label>
       <div class="controls">
@@ -166,14 +171,14 @@
     </div>
     <!-- /ko -->
 
-    <!-- ko if: ($data.output_type() == "regular" || ($data.output_type() == "pwm" && !$data.pwm_temperature_linked()) ) -->
+    <!-- ko if: ($data.output_type() == "regular" || (($data.output_type() == "pwm" || $data.output_type() == "emc") && !$data.pwm_temperature_linked()) ) -->
     <div class="control-group">
       <div class="controls">
         <label class="checkbox">
           <input type="checkbox" data-bind="checked: toggle_timer"> {{ _('Timer Toggle') }}
         </label>
         <span class="help-inline">Toggle output every amount of seconds. It will start when the print starts and stop when print is complete. For
-          PWM pins it will use the default PWM value when ON.
+          PWM output it will use the default PWM duty cycle when ON.
         </span>
       </div>
     </div>
@@ -196,9 +201,10 @@
     <!-- /ko -->
 
 
-    <!-- ko ifnot: (($data.output_type() == "regular" || $data.output_type() == "pwm") &&  $data.toggle_timer()) -->
+    <!-- ko ifnot: (($data.output_type() == "regular" || $data.output_type() == "pwm" || $data.output_type() == "emc") && $data.toggle_timer()) -->
     <!-- ko ifnot: ($data.output_type() == "gcode_output" || $data.output_type() == "temperature_alarm" || $data.output_type() == "shell_output") -->
     <!-- ko ifnot: ($data.output_type() == "pwm" && $data.pwm_temperature_linked()) -->
+    <!-- ko ifnot: ($data.output_type() == "emc" && $data.pwm_temperature_linked()) -->
     <div class="control-group">
       <div class="controls">
         <label class="checkbox">
@@ -228,6 +234,7 @@
         </div>
       </div>
     </div>
+    <!-- /ko -->
     <!-- /ko -->
     <!-- /ko -->
     <!-- ko ifnot: ($data.output_type() == "gcode_output" || $data.output_type() == "temperature_alarm" || $data.output_type() == "shell_output") -->
@@ -373,8 +380,8 @@
     <!-- /ko -->
 
 
-    <!-- ko if: ($data.output_type() == "temperature_alarm" || $data.output_type() == "temp_hum_control" || ($data.output_type() == "pwm" && $data.pwm_temperature_linked()))  -->
-    <!-- ko if: ($data.temp_ctr_type() == "heater" || $data.temp_ctr_type() == "cooler" || ($data.output_type() == "pwm" && $data.pwm_temperature_linked()))  -->
+    <!-- ko if: ($data.output_type() == "temperature_alarm" || $data.output_type() == "temp_hum_control" || (($data.output_type() == "pwm" || $data.output_type() == "emc") && $data.pwm_temperature_linked()))  -->
+    <!-- ko if: ($data.temp_ctr_type() == "heater" || $data.temp_ctr_type() == "cooler" || (($data.output_type() == "pwm" || $data.output_type() == "emc") && $data.pwm_temperature_linked()))  -->
     <div class="control-group">
       <label class="control-label">Temperature Sensor</label>
       <div class="controls">
@@ -482,6 +489,8 @@
         <span class="help-inline">Value is in Hz</span>
       </div>
     </div>
+    <!-- /ko -->
+    <!-- ko if: ($data.output_type() == "emc" || $data.output_type() == "pwm")  -->
     <div class="control-group">
       <label class="control-label">{{ _('Default Duty Cycle') }}</label>
       <div class="controls">
@@ -628,6 +637,7 @@
             <option value="bme680">BME680</option>
             <option value="am2320">AM2320</option>
             <option value="aht10">AHT10</option>
+            <option value="emc2101">EMC2101</option>
             <option value="tmp102">TMP102</option>
             <option value="max31855">MAX31855</option>
             <option value="rpi">Raspberry Pi CPU</option>
@@ -745,9 +755,9 @@
           <span class="help-inline">CE select: CE0 on GPIO 8 or CE1 on GPIO 7</span>
         </div>
       </div>
-      
+
       <!-- /ko -->
-      <!-- ko ifnot: ($data.temp_sensor_type() == "rpi") || ($data.temp_sensor_type() == "18b20") || ($data.temp_sensor_type() == "si7021") || ($data.temp_sensor_type() == "bme280") || ($data.temp_sensor_type() == "am2320") || ($data.temp_sensor_type() == "tmp102") || ($data.temp_sensor_type() == "max31855") || ($data.temp_sensor_type() == "mcp9808") || ($data.temp_sensor_type() == "temp_raw_i2c")  || ($data.temp_sensor_type() == "hum_raw_i2c") -->
+      <!-- ko ifnot: ($data.temp_sensor_type() == "rpi") || $data.temp_sensor_type() == "emc2101" || ($data.temp_sensor_type() == "18b20") || ($data.temp_sensor_type() == "si7021") || ($data.temp_sensor_type() == "bme280") || ($data.temp_sensor_type() == "am2320") || ($data.temp_sensor_type() == "tmp102") || ($data.temp_sensor_type() == "max31855") || ($data.temp_sensor_type() == "mcp9808") || ($data.temp_sensor_type() == "temp_raw_i2c")  || ($data.temp_sensor_type() == "hum_raw_i2c") -->
       <div class="control-group">
         <label class="control-label" for="settings-enclosure-dhtPin">{{ _('Sensor Pin') }}</label>
         <div class="controls">
