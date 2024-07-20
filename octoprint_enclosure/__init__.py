@@ -1126,7 +1126,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     def handle_temperature_events(self):
         for temperature_alarm in [item for item in self.rpi_outputs if item['output_type'] == 'temperature_alarm']:
             set_temperature = self.to_float(temperature_alarm['alarm_set_temp'])
-            if int(set_temperature) is 0:
+            if int(set_temperature) == 0:
                 continue
             linked_data = [item for item in self.temperature_sensor_data if
                            item['index_id'] == temperature_alarm['linked_temp_sensor']].pop()
