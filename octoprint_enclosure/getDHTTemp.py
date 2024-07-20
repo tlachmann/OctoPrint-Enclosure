@@ -3,7 +3,6 @@ import time
 import adafruit_dht
 from microcontroller import Pin
 
-
 # Parse command line parameters.
 sensor_args =   {
                     '11': adafruit_dht.DHT11,
