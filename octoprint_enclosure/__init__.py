@@ -25,9 +25,6 @@ from smbus2 import SMBus
 from .getPiTemp import PiTemp
 import struct
 
-## Import modifications for Hardware PWM using PiGPIO
-import pigpio
-##
 
 #Function that returns Boolean output state of the GPIO inputs / outputs
 def PinState_Boolean(pin, ActiveLow) :
@@ -69,6 +66,7 @@ def Pwm_Channel(pin):
     else:
         raise ValueError("Not a Hardware PWM pin")
 
+
 class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplatePlugin, octoprint.plugin.SettingsPlugin,
                       octoprint.plugin.AssetPlugin, octoprint.plugin.BlueprintPlugin,
                       octoprint.plugin.EventHandlerPlugin):
@@ -86,8 +84,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     development_mode = False
     dummy_value = 30.0
     dummy_delta = 0.5
-    
-    
+
     def __init__(self):
         # mqtt helper
         self.mqtt_publish = lambda *args, **kwargs: None
@@ -1214,10 +1211,10 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             else:
                 sudo_str = ""
             cmd = sudo_str + "python3 " + script + str(sensor) + " " + str(pin)
-            if  self._settings.get(["debug_temperature_log"]) is True:
+            if self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature dht cmd: %s", cmd)
             stdout = (Popen(cmd, shell=True, stdout=PIPE).stdout).read()
-            if  self._settings.get(["debug_temperature_log"]) is True:
+            if self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Dht result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
