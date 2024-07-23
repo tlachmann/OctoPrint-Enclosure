@@ -25,6 +25,9 @@ from smbus2 import SMBus
 from .getPiTemp import PiTemp
 import struct
 
+## Import modifications for Hardware PWM using PiGPIO
+import pigpio
+##
 
 #Function that returns Boolean output state of the GPIO inputs / outputs
 def PinState_Boolean(pin, ActiveLow) :
@@ -83,7 +86,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     development_mode = False
     dummy_value = 30.0
     dummy_delta = 0.5
-
+    
+    
     def __init__(self):
         # mqtt helper
         self.mqtt_publish = lambda *args, **kwargs: None
@@ -91,6 +95,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         self.mqtt_root_topic = "octoprint/plugins/enclosure"
         self.mqtt_sensor_topic = self.mqtt_root_topic + "/" + "enclosure"
         self.mqtt_message = "{\"temperature\": 0, \"humidity\": 0}"
+
+
 
     def start_timer(self):
         """
@@ -1525,7 +1531,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 else:
                     calculated_duty = 0
 
-                self.write_pwm(gpio_pin, self.constrain(calculated_duty, 0, 100))
+                self.write_hwpwm(gpio_pin, self.constrain(calculated_duty, 0, 100))
 
         except Exception as ex:
             self.log_error(ex)
