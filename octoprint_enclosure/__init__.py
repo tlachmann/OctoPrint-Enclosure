@@ -25,9 +25,7 @@ from smbus2 import SMBus
 from .getPiTemp import PiTemp
 import struct
 
-## Import modifications for Hardware PWM using PiGPIO
-import pigpio
-##
+
 
 #Function that returns Boolean output state of the GPIO inputs / outputs
 def PinState_Boolean(pin, ActiveLow) :
@@ -60,14 +58,27 @@ def CheckInputActiveLow(Input_Pull_Resistor):
 
 #Function that returns the hardware PWM channel or raises ValueError otherwise
 def Pwm_Channel(pin):
-    pwm0_pins = [12, 18]
-    pwm1_pins = [13, 19]
+    pwm0_pins = [12, 18, 40, 52]
+    pwm1_pins = [13, 19, 41, 45, 53]
     if pin in pwm0_pins:
         return 0
     elif pin in pwm1_pins:
         return 1
     else:
         raise ValueError("Not a Hardware PWM pin")
+    
+def pwmFunction(pin):
+    alt0_pins = [12, 13, 40, 41, 45]
+    alt1_pins = [52, 53]
+    alt5_pins = [18, 19,]
+    if pin in alt0_pins:
+        return "ALT0"
+    elif pin in alt1_pins:
+        return "ALT1"
+    elif pin in alt5_pins:
+        return "ALT5"
+    else:
+        raise ValueError("Pin Function not found")
 
 
 class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplatePlugin, octoprint.plugin.SettingsPlugin,
@@ -87,38 +98,6 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     development_mode = False
     dummy_value = 30.0
     dummy_delta = 0.5
-
-## New stuff, Init borrowed from HardwarePWM
-    def __init__(self):
-        self.IOpin = 13
-        self.Freq = 25000
-        self.dutyCycle = 0
-        self.HWGPIO = pigpio.pi()
-
-    def startHWPWM(self, pin, hz, percCycle):
-        cycle=int(percCycle*10000)
-        if (self.HWGPIO.connected):
-            if (pin==12 or pin==13 or pin==18 or pin==19):
-                self.HWGPIO.set_mode(pin, pigpio.ALT5)
-                self.HWGPIO.hardware_PWM(pin, hz, cycle)
-            else:
-                self._logger.error(str(pin)+" is not a hardware PWM pin.")
-        else:
-            self._logger.error("Not connected to PIGPIO")
-    def write_hwpwm(self,gpio,pwm_value):
-        for gpio_out_pwm in list(filter(lambda item: item['output_type'] == 'pwm', self.rpi_outputs)):
-            pwm_frequency = self.to_int(gpio_out_pwm['pwm_frequency'])
-        for pwm in self.pwm_instances:
-            if gpio in pwm:
-                pwm_object=pwm[gpio]
-                old_pwm_value = pwm['duty_cycle'] if 'duty_cycle' in pwm else -1
-                if not self.to_int(old_pwm_value) == self.to_int(pwm_value):
-                    pwm['duty_cycle'] = pwm_value
-                    self.startHWPWM(gpio, pwm_frequency, pwm_value) ## Figure out what to use instead of hardcoded freq
-                    self._logger.info("Writing PWM on pigpio: %s value %s and frequency %s", gpio, pwm_value, pwm_frequency)
-                self.update_ui()
-
-##
 
     def __init__(self):
         # mqtt helper
@@ -943,6 +922,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 self.update_ui_outputs()
                 return
 
+
+
             if output['output_type'] == 'pwm':
                 for pwm in self.pwm_instances:
                     if gpio_pin in pwm:
@@ -1732,22 +1713,32 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             for gpio_out_pwm in list(filter(lambda item: item['output_type'] == 'pwm', self.rpi_outputs)):
                 pin = self.to_int(gpio_out_pwm['gpio_pin'])
                 pwm_freqency = self.to_int(gpio_out_pwm["pwm_frequency"])
+                initDutyCycle = self.to_int(gpio_out_pwm["duty_cycle"])                
                 for pwm in (pwm_dict for pwm_dict in self.pwm_instances if pin in pwm_dict):
                     pwm[pin].stop()
                     self.pwm_instances.remove(pwm)
                 self.clear_channel(pin)
                 try:
                     if "hw_pwm" in gpio_out_pwm and gpio_out_pwm["hw_pwm"] is True:
-                        from rpi_hardware_pwm import HardwarePWM
+                        import pigpio 
+                        pinMode = pwmFunction(pin)
+                        #from rpi_hardware_pwm import HardwarePWM
                         pwm_channel_number = Pwm_Channel(pin)  # Raises valueError if not a hardware PWM pin
-                        self._logger.info("starting Hardware PWM on pin %i channel %i at %i Hz", pin, pwm_channel_number, pwm_freqency)
-                        # If RPi dtoverlay has not been configured this will throw rpi_hardware_pwm.HardwarePWMException with information on what to do.
-                        pwm_instance = HardwarePWM(pwm_channel=pwm_channel_number, hz=pwm_freqency)
+                        piGPIO = pigpio.pi()
+                        if piGPIO.connected:
+                            self._logger.info("starting Hardware PWM on pin %i channel %i at %i Hz", pin, pwm_channel_number, pwm_freqency)
+                            # If RPi dtoverlay has not been configured this will throw rpi_hardware_pwm.HardwarePWMException with information on what to do.
+                            piGPIO.set_mode(pin, ["pigpio."]pinMode)
+                            pwm_instance = piGPIO.hardware_PWM(gpio=pin, PWMfreq=pwm_freqency, PWMduty=int(initDutyCycle*10000))
+                            #pwm_instance = HardwarePWM(pwm_channel=pwm_channel_number, hz=pwm_freqency)
+                        else:
+                            self._logger.error("HardwarePWM module not initilized. check pigpio"
                     else:
                         self._logger.info("starting PWM on pin %s at %i Hz", pin, pwm_freqency)
                         GPIO.setup(pin, GPIO.OUT)
                         pwm_instance = GPIO.PWM(pin, pwm_freqency)
-                    pwm_instance.start(0)
+                    pwm_start_result=pwm_instance.start(0)
+                    if pwm_start_result: self._logger.error("HardwarePWM not started. error: %s ", pwm_start_result)
                     self.pwm_instances.append({pin: pwm_instance})
                 except ImportError as error:
                     self._logger.error("HardwarePWM module not installed. Install using pip install rpi-hardware-pwm")
