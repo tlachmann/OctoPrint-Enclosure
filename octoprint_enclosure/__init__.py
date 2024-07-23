@@ -1715,7 +1715,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 pwm_freqency = self.to_int(gpio_out_pwm["pwm_frequency"])
                 initDutyCycle = self.to_int(gpio_out_pwm["duty_cycle"])                
                 for pwm in (pwm_dict for pwm_dict in self.pwm_instances if pin in pwm_dict):
-                    pwm[pin].stop()
+                    pwm_dict[pin].stop()
                     self.pwm_instances.remove(pwm)
                 self.clear_channel(pin)
                 try:
