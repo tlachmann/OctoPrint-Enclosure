@@ -25,6 +25,9 @@ from smbus2 import SMBus
 from .getPiTemp import PiTemp
 import struct
 
+## Import modifications for Hardware PWM using PiGPIO
+import pigpio
+##
 
 #Function that returns Boolean output state of the GPIO inputs / outputs
 def PinState_Boolean(pin, ActiveLow) :
@@ -66,6 +69,7 @@ def Pwm_Channel(pin):
     else:
         raise ValueError("Not a Hardware PWM pin")
 
+
 class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplatePlugin, octoprint.plugin.SettingsPlugin,
                       octoprint.plugin.AssetPlugin, octoprint.plugin.BlueprintPlugin,
                       octoprint.plugin.EventHandlerPlugin):
@@ -83,6 +87,38 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     development_mode = False
     dummy_value = 30.0
     dummy_delta = 0.5
+
+## New stuff, Init borrowed from HardwarePWM
+    def __init__(self):
+        self.IOpin = 13
+        self.Freq = 25000
+        self.dutyCycle = 0
+        self.HWGPIO = pigpio.pi()
+
+    def startHWPWM(self, pin, hz, percCycle):
+        cycle=int(percCycle*10000)
+        if (self.HWGPIO.connected):
+            if (pin==12 or pin==13 or pin==18 or pin==19):
+                self.HWGPIO.set_mode(pin, pigpio.ALT5)
+                self.HWGPIO.hardware_PWM(pin, hz, cycle)
+            else:
+                self._logger.error(str(pin)+" is not a hardware PWM pin.")
+        else:
+            self._logger.error("Not connected to PIGPIO")
+    def write_hwpwm(self,gpio,pwm_value):
+        for gpio_out_pwm in list(filter(lambda item: item['output_type'] == 'pwm', self.rpi_outputs)):
+            pwm_frequency = self.to_int(gpio_out_pwm['pwm_frequency'])
+        for pwm in self.pwm_instances:
+            if gpio in pwm:
+                pwm_object=pwm[gpio]
+                old_pwm_value = pwm['duty_cycle'] if 'duty_cycle' in pwm else -1
+                if not self.to_int(old_pwm_value) == self.to_int(pwm_value):
+                    pwm['duty_cycle'] = pwm_value
+                    self.startHWPWM(gpio, pwm_frequency, pwm_value) ## Figure out what to use instead of hardcoded freq
+                    self._logger.info("Writing PWM on pigpio: %s value %s and frequency %s", gpio, pwm_value, pwm_frequency)
+                self.update_ui()
+
+##
 
     def __init__(self):
         # mqtt helper
@@ -1208,10 +1244,10 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             else:
                 sudo_str = ""
             cmd = sudo_str + "python3 " + script + str(sensor) + " " + str(pin)
-            if  self._settings.get(["debug_temperature_log"]) is True:
+            if self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Temperature dht cmd: %s", cmd)
             stdout = (Popen(cmd, shell=True, stdout=PIPE).stdout).read()
-            if  self._settings.get(["debug_temperature_log"]) is True:
+            if self._settings.get(["debug_temperature_log"]) is True:
                 self._logger.debug("Dht result: %s", stdout)
             temp, hum = stdout.decode("utf-8").split("|")
             return (self.to_float(temp.strip()), self.to_float(hum.strip()))
