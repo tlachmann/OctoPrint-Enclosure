@@ -990,6 +990,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 self._logger.debug("Queue id stopped and removed from list...")
                 self._logger.debug("Old queue list: %s", old_list)
                 self._logger.debug("New queue list: %s", self.event_queue)
+                
+                
 
     def update_ui_outputs(self):
         try:
@@ -1058,6 +1060,9 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             self._plugin_manager.send_plugin_message(self._identifier, dict(filament_sensor_status=sensor_status))
         except Exception as ex:
             self.log_error(ex)
+            
+            
+            
 
     def get_sensor_data(self, sensor):
         try:
@@ -1128,6 +1133,10 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             return None, None, None
         except Exception as ex:
             self.log_error(ex)
+            
+            
+            
+            
 
     def handle_temperature_events(self):
         for temperature_alarm in [item for item in self.rpi_outputs if item['output_type'] == 'temperature_alarm']:
@@ -1619,11 +1628,15 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                             control_status['status'] = current_status
         except Exception as ex:
             self.log_error(ex)
+            
+
 
     def log_error(self, ex):
         template = "An exception of type {0} occurred on {1}. Arguments:\n{2!r}"
         message = template.format(type(ex).__name__, inspect.currentframe().f_code.co_name, ex.args)
         self._logger.warn(message, exc_info = True)
+
+
 
     def setup_gpio(self):
         try:
@@ -1689,40 +1702,66 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
     def configure_gpio(self):
         try:
-
-            for gpio_out in list(
-                    filter(lambda item: (item['output_type'] == 'regular' or item['output_type'] == 'temp_hum_control') and
-                            item['gpio_i2c_enabled'] == False,
-                           self.rpi_outputs)):
+            # Regular GPI Out and controlled regular outs
+            for gpio_out in list(filter(lambda item: (item['output_type'] == 'regular' or 
+                    item['output_type'] == 'temp_hum_control') and 
+                    item['gpio_i2c_enabled'] == False, self.rpi_outputs)):
                 initial_value = GPIO.HIGH if gpio_out['active_low'] else GPIO.LOW
                 pin = self.to_int(gpio_out['gpio_pin'])
                 if pin not in self.rpi_outputs_not_changed:
                     self._logger.info("Setting GPIO pin %s as OUTPUT with initial value: %s", pin, initial_value)
                     GPIO.setup(pin, GPIO.OUT, initial=initial_value)
+                    
+                    
+                    
             for gpio_out_pwm in list(filter(lambda item: item['output_type'] == 'pwm', self.rpi_outputs)):
                 pin = self.to_int(gpio_out_pwm['gpio_pin'])
                 pwm_freqency = self.to_int(gpio_out_pwm["pwm_frequency"])
+<<<<<<< Updated upstream
                 for pwm in (pwm_dict for pwm_dict in self.pwm_instances if pin in pwm_dict):
                     pwm[pin].stop()
                     self.pwm_instances.remove(pwm)
                 self.clear_channel(pin)
+=======
+                pwmInit=True
+                
+                self._logger.info("pwm_freqency: %s pin: %s", pwm_freqency, pin)
+                self._logger.info("gpio_out_pwm: %s", gpio_out_pwm)
+                self._logger.info("pwm_instances: %s", self.pwm_instances)
+                if self.pwm_instances:
+                    for pwm_dict in self.pwm_instances:
+                        self._logger.info("for 1: pwm_dict: %s", pwm_dict)
+                        for pwm in self.pwm_instances:
+                            self._logger.info("for 2: pwm: %s", pwm)
+                            if pin in pwm_dict:
+                                self._logger.info("if 3: pin: %s", pin)
+                                pwmInit=False
+>>>>>>> Stashed changes
                 try:
-                    if "hw_pwm" in gpio_out_pwm and gpio_out_pwm["hw_pwm"] is True:
-                        from rpi_hardware_pwm import HardwarePWM
-                        pwm_channel_number = Pwm_Channel(pin)  # Raises valueError if not a hardware PWM pin
-                        self._logger.info("starting Hardware PWM on pin %i channel %i at %i Hz", pin, pwm_channel_number, pwm_freqency)
-                        # If RPi dtoverlay has not been configured this will throw rpi_hardware_pwm.HardwarePWMException with information on what to do.
-                        pwm_instance = HardwarePWM(pwm_channel=pwm_channel_number, hz=pwm_freqency)
-                    else:
-                        self._logger.info("starting PWM on pin %s at %i Hz", pin, pwm_freqency)
-                        GPIO.setup(pin, GPIO.OUT)
-                        pwm_instance = GPIO.PWM(pin, pwm_freqency)
-                    pwm_instance.start(0)
-                    self.pwm_instances.append({pin: pwm_instance})
+                    if pwmInit:
+                        if "hw_pwm" in gpio_out_pwm and gpio_out_pwm["hw_pwm"] is True:
+                            from rpi_hardware_pwm import HardwarePWM
+                            pwm_channel_number = Pwm_Channel(pin)  # Raises valueError if not a hardware PWM pin
+                            self._logger.info("starting Hardware PWM on pin %i channel %i at %i Hz", pin, pwm_channel_number, pwm_freqency)
+                            # If RPi dtoverlay has not been configured this will throw rpi_hardware_pwm.HardwarePWMException with information on what to do.
+                            pwm_instance = HardwarePWM(pwm_channel=pwm_channel_number, hz=pwm_freqency)
+                        else: 
+                            GPIO.setup(pin, GPIO.OUT)
+                            pwm_instance = GPIO.PWM(pin, pwm_freqency)
+                            self._logger.info("starting PWM on pin %s at %i Hz", pin, pwm_freqency)
+                        pwm_instance.start(0)
+                        self.pwm_instances.append({pin: pwm_instance})
+                except RuntimeError as error:
+                        self._logger.error("Error: %s", error)
                 except ImportError as error:
                     self._logger.error("HardwarePWM module not installed. Install using pip install rpi-hardware-pwm")
                 except ValueError as error:
                     self._logger.error("Invalid Hardware PMW pin. pwm0 is GPIO pin 18 is physical pin 12 and pwm1 is GPIO pin 19 is physical pin 13")
+                    #else:
+                        #pwm_dict[pin].stop()
+                        #self.pwm_instances.remove(pwm)
+                        #self.clear_channel(pin)
+                        
             for gpio_out_neopixel in list(
                     filter(lambda item: item['output_type'] == 'neopixel_direct', self.rpi_outputs)):
                 pin = self.to_int(gpio_out_neopixel['gpio_pin'])
