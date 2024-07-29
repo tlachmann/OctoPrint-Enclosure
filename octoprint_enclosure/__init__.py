@@ -1717,13 +1717,15 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             for gpio_out_pwm in list(filter(lambda item: item['output_type'] == 'pwm', self.rpi_outputs)):
                 pin = self.to_int(gpio_out_pwm['gpio_pin'])
                 pwm_freqency = self.to_int(gpio_out_pwm["pwm_frequency"])
-<<<<<<< Updated upstream
+                initPWM=True
+                """                 
                 for pwm in (pwm_dict for pwm_dict in self.pwm_instances if pin in pwm_dict):
-                    pwm[pin].stop()
-                    self.pwm_instances.remove(pwm)
-                self.clear_channel(pin)
-=======
-                pwmInit=True
+                    #pwm[pin].stop()
+                    #self.pwm_instances.remove(pwm)
+                    #self.clear_channel(pin)
+                    initPWM=False
+                """
+
                 
                 self._logger.info("pwm_freqency: %s pin: %s", pwm_freqency, pin)
                 self._logger.info("gpio_out_pwm: %s", gpio_out_pwm)
@@ -1735,10 +1737,9 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                             self._logger.info("for 2: pwm: %s", pwm)
                             if pin in pwm_dict:
                                 self._logger.info("if 3: pin: %s", pin)
-                                pwmInit=False
->>>>>>> Stashed changes
+                                initPWM=False
                 try:
-                    if pwmInit:
+                    if initPWM:
                         if "hw_pwm" in gpio_out_pwm and gpio_out_pwm["hw_pwm"] is True:
                             from rpi_hardware_pwm import HardwarePWM
                             pwm_channel_number = Pwm_Channel(pin)  # Raises valueError if not a hardware PWM pin
