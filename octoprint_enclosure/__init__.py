@@ -103,7 +103,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         Function to start timer that checks enclosure temperature
         """
 
-        self._check_temp_timer = RepeatedTimer(10, self.check_enclosure_temp, None, None, True)
+        self._check_temp_timer = RepeatedTimer(15, self.check_enclosure_temp, None, None, True)
         self._check_temp_timer.start()
 
     @staticmethod
@@ -128,6 +128,14 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             return val
         except:
             return 0
+
+    @staticmethod
+    def to_bool(value):
+        try:
+            bool = bool(value)
+            return bool
+        except:
+            return "error"
 
     @staticmethod
     def is_hour(value):
@@ -902,8 +910,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                         self.gpio_i2c_write(output, not current_value)
                     else:
                         self.write_gpio(gpio_pin, not current_value)
-                    thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
-                    thread.start()
+                    gpioThread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
+                    gpioThread.start()
                 else:
                     off_value = True if output['active_low'] else False
                     if output['gpio_i2c_enabled']:
@@ -934,8 +942,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
                         if not self.print_complete:
                             self.write_pwm(gpio_pin, write_value)
-                            thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
-                            thread.start()
+                            gpioThread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
+                            gpioThread.start()
                         else:
                             self.write_pwm(self.to_int(output['gpio_pin']), 0)
                         self.update_ui_outputs()
@@ -958,8 +966,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                     self.write_emc_pwm(index_id, 0)
                 else:
                     self.write_emc_pwm(index_id, write_value)
-                    thread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
-                    thread.start()
+                    gpioThread = threading.Timer(time_delay, self.toggle_output, args=[index_id])
+                    gpioThread.start()
                 return
 
     def update_ui(self):
@@ -985,7 +993,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         for task in self.event_queue:
             self._logger.debug("Queue id found...")
             if task['queue_id'] == queue_id:
-                task['thread'].cancel()
+                task['gpioThread'].cancel()
                 self.event_queue.remove(task)
                 self._logger.debug("Queue id stopped and removed from list...")
                 self._logger.debug("Old queue list: %s", old_list)
@@ -1515,11 +1523,14 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             for pwm_output in list(filter(lambda item: item['output_type'] == 'pwm' and item['pwm_temperature_linked'],
                                           self.rpi_outputs)):
                 gpio_pin = self.to_int(pwm_output['gpio_pin'])
-                if self._printer.is_printing():
+                opt_startup_with_server = self.to_bool(pwm_output['startup_with_server'])
+                if self._printer.is_printing() or opt_startup_with_server:
                     index_id = self.to_int(pwm_output['index_id'])
                     linked_id = self.to_int(pwm_output['linked_temp_sensor'])
                     linked_data = self.get_linked_temp_sensor_data(linked_id)
                     current_temp = self.to_float(linked_data['temperature'])
+                    opt_auto_shutdown = self.to_bool(pwm_output['auto_shutdown'])                    
+
 
                     duty_a = self.to_float(pwm_output['duty_a'])
                     duty_b = self.to_float(pwm_output['duty_b'])
@@ -1535,13 +1546,14 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                         calculated_duty = 0
 
                     self._logger.debug("Calculated duty for PWM %s is %s", index_id, calculated_duty)
-                elif self.print_complete:
+                elif self.print_complete and opt_auto_shutdown:
                     calculated_duty = self.to_int(pwm_output['duty_cycle'])
-                else:
+                elif opt_auto_shutdown and not opt_startup_with_server and self.print_complete:
                     calculated_duty = 0
-
-                self.write_hwpwm(gpio_pin, self.constrain(calculated_duty, 0, 100))
-
+                else: 
+                    pass
+                    # keep calculated_duty
+                self.write_pwm(gpio_pin, self.constrain(calculated_duty, 0, 100))
         except Exception as ex:
             self.log_error(ex)
 
@@ -1866,7 +1878,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
     def cancel_all_events_on_queue(self):
         for task in self.event_queue:
             try:
-                task['thread'].cancel()
+                task['gpioThread'].cancel()
             except:
                 self._logger.warn("Failed to stop task %s.", task)
                 pass
@@ -2192,8 +2204,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
     def run_tasks(self):
         for task in self.event_queue:
-            if not task['thread'].is_alive():
-                task['thread'].start()
+            if not task['gpioThread'].is_alive():
+                task['gpioThread'].start()
 
     def schedule_auto_shutdown_outputs(self, rpi_output, shutdown_delay_seconds):
         sufix = 'auto_shutdown'
@@ -2309,36 +2321,36 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
 
         self._logger.debug("Scheduling neopixel output id %s for on %s delay_seconds", queue_id, delay_seconds)
 
-        thread = threading.Timer(delay_seconds, self.send_neopixel_command,
+        gpioThread = threading.Timer(delay_seconds, self.send_neopixel_command,
                                  args=[gpio_pin, ledCount, ledBrightness, red, green, blue, address, neopixel_direct,
                                        index_id, queue_id])
 
-        self.event_queue.append(dict(queue_id=queue_id, thread=thread))
+        self.event_queue.append(dict(queue_id=queue_id, thread=gpioThread))
 
     def add_pwm_output_to_queue(self, delay_seconds, rpi_output, value, sufix):
         queue_id = '{0!s}_{1!s}'.format(rpi_output['index_id'], sufix)
-        thread = None
+        gpioThread = None
 
         self._logger.debug("Scheduling pwm output id %s for on %s delay_seconds", queue_id, delay_seconds)
 
         if rpi_output['output_type'] == 'pwm':
-            thread = threading.Timer(delay_seconds, self.write_pwm,
+            gpioThread = threading.Timer(delay_seconds, self.write_pwm,
                                     args=[self.to_int(rpi_output['gpio_pin']), value, queue_id])
         elif rpi_output['output_type'] == 'emc':
-            thread = threading.Timer(delay_seconds, self.write_emc_pwm,
+            gpioThread = threading.Timer(delay_seconds, self.write_emc_pwm,
                                     args=[self.to_int(rpi_output['index_id']), value, queue_id])
-        if thread != None:
-            self.event_queue.append(dict(queue_id=queue_id, thread=thread))
+        if gpioThread != None:
+            self.event_queue.append(dict(queue_id=queue_id, thread=gpioThread))
         else:
             self._logger.error("Output_type %s not supported", rpi_output['output_type'])
 
     def schedule_pwm_duty_on_queue(self, delay_seconds, rpi_output, value, sufix):
         queue_id = '{0!s}_{1!s}_{2!s}'.format(rpi_output['index_id'], "pwm_linked_temp", sufix)
-        thread = threading.Timer(delay_seconds, self.set_pwm_duty_cycle, args=[rpi_output, value, queue_id])
+        gpioThread = threading.Timer(delay_seconds, self.set_pwm_duty_cycle, args=[rpi_output, value, queue_id])
 
         self._logger.debug("Scheduling pwm linked temp output id %s on %s delay_seconds", queue_id, delay_seconds)
 
-        self.event_queue.append(dict(queue_id=queue_id, thread=thread))
+        self.event_queue.append(dict(queue_id=queue_id, thread=gpioThread))
 
     def set_pwm_duty_cycle(self, rpi_output, value, queue_id):
         if rpi_output['output_type'] == 'pwm':
@@ -2354,22 +2366,22 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         self._logger.debug("Scheduling regular output id %s on %s delay_seconds", queue_id, delay_seconds)
 
         if rpi_output['gpio_i2c_enabled']:
-            thread = threading.Timer(delay_seconds, self.gpio_i2c_write,
+            gpioThread = threading.Timer(delay_seconds, self.gpio_i2c_write,
                                      args=[rpi_output, value, queue_id])
         else:
-            thread = threading.Timer(delay_seconds, self.write_gpio,
+            gpioThread = threading.Timer(delay_seconds, self.write_gpio,
                                      args=[self.to_int(rpi_output['gpio_pin']), value, queue_id])
 
-        self.event_queue.append(dict(queue_id=queue_id, thread=thread))
+        self.event_queue.append(dict(queue_id=queue_id, thread=gpioThread))
 
     def add_temperature_output_temperature_queue(self, delay_seconds, rpi_output, value, sufix):
         queue_id = '{0!s}_{1!s}'.format(rpi_output['index_id'], sufix)
         self._logger.debug("Scheduling temperature control id %s on %s delay_seconds", queue_id, delay_seconds)
 
-        thread = threading.Timer(delay_seconds, self.write_temperature_to_output,
+        gpioThread = threading.Timer(delay_seconds, self.write_temperature_to_output,
                                  args=[self.to_int(rpi_output['index_id']), value, queue_id])
 
-        self.event_queue.append(dict(queue_id=queue_id, thread=thread))
+        self.event_queue.append(dict(queue_id=queue_id, thread=gpioThread))
 
     def write_temperature_to_output(self, rpi_output_index, value, queue_id=None):
         try:
