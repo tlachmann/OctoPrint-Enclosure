@@ -1088,10 +1088,6 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 elif sensor['temp_sensor_type'] == "18b20":
                     temp = self.read_18b20_temp(sensor['ds18b20_serial'])
                     hum = 0
-                    airquality = 0                
-                elif sensor['temp_sensor_type'] == "owfs18b20":
-                    temp = self.read_owfs18b20_temp(sensor['ds18b20_serial'])
-                    hum = 0
                     airquality = 0
                 elif sensor['temp_sensor_type'] == "emc2101":
                     temp, hum = self.read_emc2101_temp(sensor['temp_sensor_address'], sensor['temp_sensor_i2cbus'])
@@ -1462,17 +1458,6 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         lines = device_file_result.readlines()
         device_file_result.close()
         return lines
-    
-    def read_owfs18b20_temp(self, serial_number):
-        base_dir = '/mnt/1wire/'
-        device_folder = glob.glob(base_dir + str(serial_number) + '*')[0]
-        device_file = device_folder + '/temperature'
-        device_file_result = open(device_file, 'r')
-        temp_c = float(device_file_result.readline())
-        device_file_result.close()
-        if  self._settings.get(["debug_temperature_log"]) is True:
-            self._logger.debug("DS18B20 result: %s", temp_c)
-        return temp_c
 
     def read_tmp102_temp(self, address):
         try:
@@ -1663,8 +1648,6 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                     for control_status in self.temp_hum_control_status:
                         if control_status['index_id'] == temp_hum_control['index_id']:
                             control_status['status'] = current_status
-        except TypeError as e:
-            self._logger.warn("Typeerror: .", e)
         except Exception as ex:
             self.log_error(ex)
             
@@ -1717,7 +1700,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 if gpio_pin not in self.rpi_outputs_not_changed:
                     GPIO.cleanup(gpio_pin)
                     
-                    #self._logger.debug("Call 3 Clearing channel %s", gpio_pin)
+                    self._logger.debug("Call 3 Clearing channel %s", gpio_pin)
 
             for gpio_in in list(filter(lambda item: item['input_type'] == 'gpio', self.rpi_inputs)):
                 gpio_pin = self.to_int(gpio_in['gpio_pin'])
@@ -1726,14 +1709,14 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 except:
                     pass
                 GPIO.cleanup(self.to_int(gpio_in['gpio_pin']))
-                #self._logger.debug("Call 4 Clearing event detect for channel %s", gpio_pin)
+                self._logger.debug("Call 4 Clearing event detect for channel %s", gpio_pin)
         except Exception as ex:
             self.log_error(ex)
 
     def clear_channel(self, channel):
         try:
             GPIO.cleanup(self.to_int(channel))
-            #self._logger.debug("Call 5 Clearing channel %s", channel)
+            self._logger.debug("Call 5 Clearing channel %s", channel)
         except Exception as ex:
             self.log_error(ex)
 
@@ -1764,6 +1747,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             for gpio_out_pwm in list(filter(lambda item: item['output_type'] == 'pwm', self.rpi_outputs)):
                 pin = self.to_int(gpio_out_pwm['gpio_pin'])
                 pwm_freqency = self.to_int(gpio_out_pwm["pwm_frequency"])
+                default_duty_cycle = self.to_int(gpio_out_pwm["default_duty_cycle"]*10000)
                 initPWM=True
                 """                 
                 for pwm_out in gpio_out_pwm:
@@ -1786,21 +1770,30 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                 self._logger.debug("pwm_instances: %s", self.pwm_instances)
                 if self.pwm_instances:
                     for pwm_dict in self.pwm_instances:
-                        #self._logger.debug("for 1: pwm_dict: %s", pwm_dict)
+                        self._logger.debug("for 1: pwm_dict: %s", pwm_dict)
                         for pwm in self.pwm_instances:
-                            #self._logger.debug("for 2: pwm: %s", pwm)
+                            self._logger.debug("for 2: pwm: %s", pwm)
                             if pin in pwm_dict:
                                 initPWM=False
-                                #self._logger.debug("if 3: pin: %s", pin)
+                                self._logger.debug("if 3: pin: %s", pin)
                 self._logger.debug("initPWM: %s", initPWM)
                 try:
                     if initPWM:
                         if "hw_pwm" in gpio_out_pwm and gpio_out_pwm["hw_pwm"] is True:
-                            from rpi_hardware_pwm import HardwarePWM
+                            """ from rpi_hardware_pwm import HardwarePWM
                             pwm_channel_number = Pwm_Channel(pin)  # Raises valueError if not a hardware PWM pin
                             self._logger.info("starting Hardware PWM on pin %i channel %i at %i Hz", pin, pwm_channel_number, pwm_freqency)
                             # If RPi dtoverlay has not been configured this will throw rpi_hardware_pwm.HardwarePWMException with information on what to do.
-                            pwm_instance = HardwarePWM(pwm_channel=pwm_channel_number, hz=pwm_freqency)
+                            pwm_instance = HardwarePWM(pwm_channel=pwm_channel_number, hz=pwm_freqency) """
+                            
+                            HardwarePWM = pigpio.pi()
+                            if not HardwarePWM.connected:
+                                self._logger.error("pigiod not running?")
+                                
+                            #pwm_channel_number = Pwm_Channel(pin)  # Raises valueError if not a hardware PWM pin
+                            self._logger.info("starting Hardware PWM on pin %i at %i Hz, default_duty_cycle: %s", pin, pwm_freqency, default_duty_cycle)
+                            # If RPi dtoverlay has not been configured this will throw rpi_hardware_pwm.HardwarePWMException with information on what to do.
+                            pwm_instance = HardwarePWM.hardware_PWM(pin, pwm_freqency, default_duty_cycle)
                         else: 
                             GPIO.setup(pin, GPIO.OUT)
                             pwm_instance = GPIO.PWM(pin, pwm_freqency)
@@ -2084,7 +2077,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                         PWMclass = type(pwm_object).__name__
                         self._logger.debug("pwm_object class  %s ", PWMclass)
                         self._logger.debug("pwm_object class. name %s ", pwm_object.__class__.__bases__)
-                        #self._logger.debug("pwm_object class. name %s ", pwm_object.__dict__)
+                        self._logger.debug("pwm_object class. name %s ", pwm_object.__dict__)
                         self._logger.debug("pwm_object class. name %s ", dir(pwm_object))
                         if "PWM" in PWMclass:
                             pwm_object.start(pwm_value) #should be changed back to pwm_object.ChangeDutyCycle() but this
@@ -2092,6 +2085,9 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                             self._logger.debug("Writing SoftPWM on gpio: %s value %s", gpio, pwm_value)
                         elif "HardwarePWM" in PWMclass:
                             pwm_object.change_duty_cycle(pwm_value)
+                            self._logger.debug("Writing HardPWM on gpio: %s value %s", gpio, pwm_value)
+                        elif "HardwarePWM" in PWMclass:
+                            pwm_object.set_PWM_dutycycle(gpio,(self.to_int(pwm_value)*10000))
                             self._logger.debug("Writing HardPWM on gpio: %s value %s", gpio, pwm_value)
                     self.update_ui()
                     if queue_id is not None:

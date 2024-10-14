@@ -632,6 +632,7 @@
             <option value="22">DHT22</option>
             <option value="2302">AM2302</option>
             <option value="18b20">DS18B20</option>
+            <option value="owfs18b20">OWFSDS18B20</option>
             <option value="si7021">SI7021</option>
             <option value="bme280">BME280</option>
             <option value="bme680">BME680</option>
@@ -707,6 +708,7 @@
         </div>
       </div>
       <!-- /ko -->
+
       <!-- ko if: ($data.temp_sensor_type() == "si7021") || ($data.temp_sensor_type() == "20") || ($data.temp_sensor_type() == "bme280") || ($data.temp_sensor_type() == "am2320") || ($data.temp_sensor_type() == "aht10") || ($data.temp_sensor_type() == "tmp102") || ($data.temp_sensor_type() == "mcp9808") -->
       <div class="control-group">
         <label class="control-label" for="settings-enclosure-dhtPin">{{ _('Sensor Pin') }}</label>
@@ -734,6 +736,7 @@
         </div>
       </div>
       <!-- /ko -->
+
       <!-- ko if: ($data.temp_sensor_type() == "max31855") -->
       <div class="control-group">
         <label class="control-label" for="settings-enclosure-dhtPin">{{ _('Sensor Pin') }}</label>
@@ -755,9 +758,30 @@
           <span class="help-inline">CE select: CE0 on GPIO 8 or CE1 on GPIO 7</span>
         </div>
       </div>
-
+          
+          
       <!-- /ko -->
-      <!-- ko ifnot: ($data.temp_sensor_type() == "rpi") || $data.temp_sensor_type() == "emc2101" || ($data.temp_sensor_type() == "18b20") || ($data.temp_sensor_type() == "si7021") || ($data.temp_sensor_type() == "bme280") || ($data.temp_sensor_type() == "am2320") || ($data.temp_sensor_type() == "tmp102") || ($data.temp_sensor_type() == "max31855") || ($data.temp_sensor_type() == "mcp9808") || ($data.temp_sensor_type() == "temp_raw_i2c")  || ($data.temp_sensor_type() == "hum_raw_i2c") -->
+
+      <!-- ko if: ($data.temp_sensor_type() == "owfs18b20")  -->
+      <div class="control-group">
+        <label class="control-label" for="settings-enclosure-dhtPin">{{ _('Sensor Pin') }}</label>
+        <div class="controls">
+          <input type="text" class="input-block-level" value="/mnt/1wire/" disabled="true">
+          <span class="help-inline">file system mount point for 1Wire Sensors
+          </span>
+        </div>
+      </div>
+      <div class="control-group">
+        <label class="control-label" for="settings-enclosure-dhtPin">{{ _('ds18b20_serial') }}</label>
+        <div class="controls">
+          <input type="text" class="input-block-level" data-bind="value: ds18b20_serial" value="">
+          <span class="help-inline">DS18B20 serial value, needs to be used to have support for multiple sensors, read documentation on github page
+            for more information.  The serial is typically in the form of 28-0123456789ab.</span>
+        </div>
+      </div>
+      <!-- /ko -->
+
+      <!-- ko ifnot: ($data.temp_sensor_type() == "rpi") || $data.temp_sensor_type() == "emc2101" || ($data.temp_sensor_type() == "18b20")  || ($data.temp_sensor_type() == "owfs18b20") || ($data.temp_sensor_type() == "si7021") || ($data.temp_sensor_type() == "bme280") || ($data.temp_sensor_type() == "am2320") || ($data.temp_sensor_type() == "tmp102") || ($data.temp_sensor_type() == "max31855") || ($data.temp_sensor_type() == "mcp9808") || ($data.temp_sensor_type() == "temp_raw_i2c")  || ($data.temp_sensor_type() == "hum_raw_i2c") -->
       <div class="control-group">
         <label class="control-label" for="settings-enclosure-dhtPin">{{ _('Sensor Pin') }}</label>
         <div class="controls">
