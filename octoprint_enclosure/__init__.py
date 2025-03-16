@@ -1407,8 +1407,8 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
         try:
             pitemp = PiTemp()
             temp = pitemp.getTemp()
-            if  self._settings.get(["debug_temperature_log"]) is True:
-                self._logger.debug("Pi CPU result: %s", temp)
+            #if  self._settings.get(["debug_temperature_log"]) is True:
+            #    self._logger.debug("Pi CPU result: %s", temp)
             return temp
         except Exception as ex:
             self._logger.info(
@@ -2073,19 +2073,19 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
             if queue_id is not None:
                 self._logger.debug("running scheduled queue id %s", queue_id)
             for pwm in self.pwm_instances:
-                self._logger.debug("Write_pwm nLoop 1: pwm: %s in self.pwm_instances: %s", pwm, self.pwm_instances)
+                self._logger.debug("Write_pwm nLoop 1: pwm: %s", pwm)
                 if gpio in pwm:
                     pwm_object = pwm[gpio]
-                    self._logger.debug("Write_pwm nLoop 2: pwm_object: %s ", pwm_object)
+                    #self._logger.debug("Write_pwm nLoop 2: pwm_object: %s ", pwm_object)
                     old_pwm_value = pwm['duty_cycle'] if 'duty_cycle' in pwm else -1
                     self._logger.debug("Write_pwm old_pwm_value: %s pwm_value: %s ", old_pwm_value, self.to_int(pwm_value))                    
                     if not self.to_int(old_pwm_value) == self.to_int(pwm_value):
                         pwm['duty_cycle'] = pwm_value
                         PWMclass = type(pwm_object).__name__
-                        self._logger.debug("pwm_object class  %s ", PWMclass)
-                        self._logger.debug("pwm_object class. name %s ", pwm_object.__class__.__bases__)
+                        #self._logger.debug("pwm_object class  %s ", PWMclass)
+                        #self._logger.debug("pwm_object class. name %s ", pwm_object.__class__.__bases__)
                         #self._logger.debug("pwm_object class. name %s ", pwm_object.__dict__)
-                        self._logger.debug("pwm_object class. name %s ", dir(pwm_object))
+                        #self._logger.debug("pwm_object class. name %s ", dir(pwm_object))
                         if "PWM" in PWMclass:
                             pwm_object.start(pwm_value) #should be changed back to pwm_object.ChangeDutyCycle() but this
                             # was causing errors.
@@ -2096,7 +2096,7 @@ class EnclosurePlugin(octoprint.plugin.StartupPlugin, octoprint.plugin.TemplateP
                     self.update_ui()
                     if queue_id is not None:
                         self.stop_queue_item(queue_id)
-                        self._logger.debug("Write_pwm stop_queue_item(queue_id): %s ", stop_queue_item(queue_id))
+                        self._logger.debug("Write_pwm stop_queue_item(queue_id): %s ", self.stop_queue_item(queue_id))
                     break
         except Exception as ex:
             self._logger.error(ex)
